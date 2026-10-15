@@ -36,6 +36,7 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
       email: user.email,
       role: user.role,
       name: user.name,
+      department: user.department,
     };
 
     next();
