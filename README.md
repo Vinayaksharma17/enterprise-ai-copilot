@@ -81,6 +81,15 @@ docker compose up
 - ChromaDB 0.5.23
 - Redis 7.4
 
+## Features
+
+- **Authentication & RBAC**: JWT authentication with admin/employee roles, department-based scoping, profile management.
+- **Document ingestion**: Admins upload PDF/TXT documents which are parsed, chunked, embedded, and stored in ChromaDB. Duplicate files are detected by content hash; failures are recorded with a safe reason.
+- **Grounded Q&A (RAG)**: Employees ask natural-language questions and receive answers grounded strictly in retrieved document chunks, with source citations (document name, page, excerpt).
+- **Access-controlled retrieval**: Retrieval is scoped to documents the requesting user is allowed to see (public, department, or admin-only), enforced server-side through a vector-store filter.
+- **Conversations**: Chat history is persisted per user with conversation ownership enforcement.
+- **Web UI**: Knowledge Base (upload/list/delete) and Chat (citations) pages.
+
 ## Project Status
 
 **Phase 1 - Foundation**: Complete
@@ -89,4 +98,67 @@ docker compose up
 - Basic health checks and connectivity
 - Development environment configuration
 
-Future phases will add authentication, document processing, RAG, and chat functionality.
+**Phase 2 - Core Features**: Complete
+- JWT authentication (register, login, me) and RBAC
+- Role- and department-based access control
+- User profile management
+
+**Phase 3 - RAG & AI Integration**: Complete
+- Document ingestion and processing pipeline (PDF/TXT → chunks → embeddings → ChromaDB)
+- Authorization-scoped vector search
+- RAG question answering with citations and conversation history
+- Knowledge Base and Chat user interfaces
+
+**Next**: Phase 4 - Multi-agent workflows, analytics, security hardening, and production deployment.
+
+## API Overview
+
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| `POST` | `/api/v1/auth/register` | Public | Register a new user |
+| `POST` | `/api/v1/auth/login` | Public | Authenticate and receive a JWT |
+| `GET` | `/api/v1/auth/me` | Authenticated | Current user profile |
+| `GET` | `/api/v1/documents` | Authenticated | List accessible documents |
+| `GET` | `/api/v1/documents/:id` | Authenticated | Get an accessible document |
+| `POST` | `/api/v1/documents/upload` | Admin | Upload and index a document |
+| `DELETE` | `/api/v1/documents/:id` | Admin | Delete a document and its vectors |
+| `POST` | `/api/v1/chat` | Authenticated | Ask a question, get a cited answer |
+| `GET` | `/api/v1/health` | Public | Service health |
+
+Full interactive API docs (Swagger UI) are served at `/api/v1/docs`.
+
+## AI Provider Configuration
+
+Document ingestion and Q&A require an embedding and chat model provider. Configure the
+provider and credentials in `.env` (see `.env.example`):
+
+```env
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-...
+LLM_MODEL=gpt-4o-mini
+
+EMBEDDING_PROVIDER=openai
+EMBEDDING_API_KEY=sk-...        # falls back to LLM_API_KEY when empty
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+Providers are isolated behind interfaces (`integrations/llm`) so they can be swapped.
+The backend fails fast at startup if credentials are missing outside of tests.
+
+## Testing
+
+Backend tests run against an in-memory MongoDB and mock the LLM/embedding/vector
+providers, so they need no external services:
+
+```bash
+cd backend
+npm test
+```
+
+An optional end-to-end smoke test against real ChromaDB and provider APIs is skipped by
+default. Run it with infrastructure up and credentials set:
+
+```bash
+cd backend
+RUN_SMOKE_TESTS=true CHROMA_URL=http://localhost:8000 LLM_API_KEY=sk-... npm test -- smoke.rag
+```

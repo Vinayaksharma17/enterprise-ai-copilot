@@ -25,6 +25,26 @@ cp .env.example .env
 
 **Note:** Never commit the `.env` file. It contains sensitive configuration.
 
+### AI Provider Configuration (required for document Q&A)
+
+Document ingestion and RAG question answering require an embedding and chat model
+provider. Configure these in `.env`:
+
+```env
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-...              # required
+LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=                   # optional, for OpenAI-compatible providers
+
+EMBEDDING_PROVIDER=openai       # defaults to LLM_PROVIDER
+EMBEDDING_API_KEY=sk-...        # falls back to LLM_API_KEY when empty
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_BASE_URL=             # optional, falls back to LLM_BASE_URL
+```
+
+The backend refuses to start outside of tests when the provider credentials are
+missing, so that misconfiguration fails fast instead of at query time.
+
 ## Starting the Project
 
 ### Start all services (with logs visible)

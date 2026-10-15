@@ -18,6 +18,10 @@ dist
 out
 build
 
+# Uploaded documents (never commit company documents)
+uploads/
+backend/uploads/
+
 # Docker
 docker-compose.override.yml
 
