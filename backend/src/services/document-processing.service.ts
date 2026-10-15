@@ -197,6 +197,17 @@ export const processDocument = async (doc: IDocument): Promise<IDocument> => {
       throw new Error('Embedding provider returned an unexpected number of vectors');
     }
 
+    const expectedDimensions = embeddings[0]?.length ?? 0;
+    if (
+      expectedDimensions === 0 ||
+      embeddings.some(
+        (embedding) =>
+          !Array.isArray(embedding) || embedding.length !== expectedDimensions
+      )
+    ) {
+      throw new Error('Embedding provider returned vectors with inconsistent dimensions');
+    }
+
     const records: VectorChunkRecord[] = chunks.map((chunk, index) => {
       const chunkId = `${documentId}:${chunk.chunkIndex}`;
       return {
@@ -212,6 +223,7 @@ export const processDocument = async (doc: IDocument): Promise<IDocument> => {
           allowedDepartments: doc.allowedDepartments.join(','),
           documentName: doc.name,
           pageNumber: chunk.pageNumber,
+          embeddingModel: config.llm.embeddingModel,
         },
       };
     });

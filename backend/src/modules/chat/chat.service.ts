@@ -15,6 +15,30 @@ import type { ChatInput, ChatResponse, SourceCitation } from './chat.types';
 export const NO_ANSWER_MESSAGE =
   'I could not find this information in the available knowledge base.';
 
+export const MODEL_UNAVAILABLE_MESSAGE =
+  'The AI model is currently unavailable. Please try again shortly.';
+
+/**
+ * Runs a model operation and converts any provider failure into a safe,
+ * non-leaking 503 error. This guarantees a failed generation never produces a
+ * fabricated answer or citations: the error propagates before anything is
+ * persisted.
+ */
+const runModelOperation = async <T>(operation: () => Promise<T>): Promise<T> => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError(
+      MODEL_UNAVAILABLE_MESSAGE,
+      503,
+      errorCodes.SERVICE_UNAVAILABLE
+    );
+  }
+};
+
 const SYSTEM_PROMPT = [
   'You are an enterprise knowledge assistant. Answer employee questions using ONLY the retrieved evidence provided in the user message.',
   '',
@@ -28,6 +52,13 @@ const SYSTEM_PROMPT = [
 ].join('\n');
 
 const EXCERPT_LENGTH = 320;
+
+// Signal that the model could not ground an answer in the evidence. Matched
+// tolerantly so minor model phrasing differences still suppress citations.
+const NO_ANSWER_SIGNAL = 'could not find this information';
+
+const isNoAnswerResponse = (answer: string): boolean =>
+  answer.trim().toLowerCase().includes(NO_ANSWER_SIGNAL);
 
 interface RetrievalCandidate {
   chunkId: string;
@@ -216,7 +247,9 @@ export const answerQuestion = async (
     return answerWithoutEvidence();
   }
 
-  const queryEmbedding = await getEmbeddingsProvider().embedQuery(input.question);
+  const queryEmbedding = await runModelOperation(() =>
+    getEmbeddingsProvider().embedQuery(input.question)
+  );
 
   const retrieved = await getVectorStore().querySimilar({
     embedding: queryEmbedding,
@@ -254,7 +287,22 @@ export const answerQuestion = async (
     { role: 'user', content: buildUserPrompt(input.question, promptChunks) },
   ];
 
-  const answer = await getChatProvider().generate(messages);
+  const answer = await runModelOperation(() =>
+    getChatProvider().generate(messages)
+  );
+
+  // If the model declined to answer from the evidence, return no citations: the
+  // retrieved chunks did not actually ground an answer.
+  if (isNoAnswerResponse(answer)) {
+    await persistMessages(
+      conversationId,
+      user.id,
+      input.question,
+      NO_ANSWER_MESSAGE,
+      []
+    );
+    return { conversationId, answer: NO_ANSWER_MESSAGE, sources: [] };
+  }
 
   const sources: IMessageSource[] = resolvedSources.map((source) => ({
     documentId: source.citation.documentId,

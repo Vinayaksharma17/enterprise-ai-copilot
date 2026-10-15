@@ -20,6 +20,8 @@ export interface VectorChunkMetadata {
   allowedDepartments: string;
   documentName: string;
   pageNumber?: number;
+  /** Embedding model that produced the vector, recorded for provenance. */
+  embeddingModel?: string;
 }
 
 export interface VectorChunkRecord {
@@ -77,6 +79,10 @@ const buildChromaMetadata = (
     result.pageNumber = metadata.pageNumber;
   }
 
+  if (metadata.embeddingModel) {
+    result.embeddingModel = metadata.embeddingModel;
+  }
+
   return result;
 };
 
@@ -95,6 +101,10 @@ const normalizeMetadata = (
   documentName: String(metadata?.documentName ?? ''),
   pageNumber:
     typeof metadata?.pageNumber === 'number' ? metadata.pageNumber : undefined,
+  embeddingModel:
+    typeof metadata?.embeddingModel === 'string'
+      ? metadata.embeddingModel
+      : undefined,
 });
 
 export class ChromaVectorStore implements VectorStore {

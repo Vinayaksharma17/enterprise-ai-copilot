@@ -5,6 +5,7 @@ import {
   SystemMessage,
 } from '@langchain/core/messages';
 import { config } from '../../config/env';
+import { OllamaChatProvider } from './ollama.chat';
 import type { ChatMessage, ChatProvider } from './llm.interface';
 
 const toBaseMessage = (message: ChatMessage) => {
@@ -65,11 +66,23 @@ export class OpenAIChatProvider implements ChatProvider {
   }
 }
 
+/**
+ * Builds the chat provider selected by `LLM_PROVIDER`. Only the configured
+ * provider is ever constructed, so selecting Ollama guarantees no cloud client
+ * (and no cloud credentials) is used implicitly.
+ */
+export const createChatProvider = (): ChatProvider => {
+  if (config.llm.provider === 'ollama') {
+    return new OllamaChatProvider();
+  }
+  return new OpenAIChatProvider();
+};
+
 let chatProviderInstance: ChatProvider | undefined;
 
 export const getChatProvider = (): ChatProvider => {
   if (!chatProviderInstance) {
-    chatProviderInstance = new OpenAIChatProvider();
+    chatProviderInstance = createChatProvider();
   }
   return chatProviderInstance;
 };
