@@ -1,0 +1,19 @@
+Acme Corporation Employee Handbook (Excerpt)
+
+Remote Work Policy
+Employees may work remotely up to three days per week, subject to manager approval.
+Remote work requests must be submitted through the human resources portal at least
+five business days in advance. Employees working remotely must remain reachable
+during core hours, which are 10:00 to 16:00 in their local time zone. The company
+provides a home office stipend of 500 dollars per year for eligible remote workers.
+
+Expense Reimbursement
+Employees may claim reimbursement for approved business expenses within thirty days
+of purchase. Itemized receipts are required for every expense above twenty-five
+dollars. Reimbursements are processed on the next regular payroll cycle.
+
+Information Security
+Company laptops must use full-disk encryption and must connect through the corporate
+virtual private network when accessing internal systems from outside the office.
+Passwords must be at least fourteen characters long and must not be reused across
+company systems.
