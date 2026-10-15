@@ -1,0 +1,25 @@
+{
+  "name": "enterprise-ai-copilot",
+  "version": "1.0.0",
+  "description": "Enterprise AI Knowledge & Support Copilot",
+  "private": true,
+  "scripts": {
+    "dev": "docker compose up",
+    "dev:build": "docker compose up --build",
+    "dev:detached": "docker compose up -d",
+    "dev:logs": "docker compose logs -f",
+    "stop": "docker compose down",
+    "stop:clean": "docker compose down -v",
+    "build": "docker compose build",
+    "build:backend": "docker compose build backend",
+    "build:frontend": "docker compose build frontend"
+  },
+  "keywords": [
+    "ai",
+    "rag",
+    "enterprise",
+    "knowledge-base"
+  ],
+  "author": "",
+  "license": "MIT"
+}
