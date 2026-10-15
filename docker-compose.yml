@@ -57,6 +57,25 @@ services:
       retries: 5
       start_period: 10s
 
+  # Local model runtime for chat generation and embeddings.
+  # Models are NOT downloaded on startup; pull them manually (see README):
+  #   docker exec -it enterprise-ai-copilot-ollama ollama pull qwen2.5:3b
+  #   docker exec -it enterprise-ai-copilot-ollama ollama pull nomic-embed-text
+  # They persist in the ollama_data volume across container recreation.
+  ollama:
+    image: ollama/ollama:0.5.7
+    container_name: enterprise-ai-copilot-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - enterprise-network
+    # Ollama is reachable by the backend at http://ollama:11434 over the
+    # internal network only. Uncomment to expose the port for local diagnostics
+    # (bound to loopback so it is never reachable from untrusted networks).
+    # ports:
+    #   - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+
   backend:
     build:
       context: ./backend
@@ -71,6 +90,11 @@ services:
         condition: service_healthy
       chromadb:
         condition: service_healthy
+      # Only wait for the container to start; the backend retries transient
+      # Ollama unavailability so it does not fail permanently while models are
+      # still loading or being pulled.
+      ollama:
+        condition: service_started
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       BACKEND_PORT: ${BACKEND_PORT:-5000}
@@ -97,15 +121,26 @@ services:
       RAG_TOP_K: ${RAG_TOP_K:-5}
       RAG_SIMILARITY_THRESHOLD: ${RAG_SIMILARITY_THRESHOLD:-0}
       # LLM / embeddings provider
-      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      # Defaults select local Ollama inference. Set LLM_PROVIDER/EMBEDDING_PROVIDER
+      # to "openai" (and provide keys) to use a cloud provider instead.
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-${LLM_API_KEY:-}}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      # Ollama runtime
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-120000}
+      OLLAMA_MAX_CONCURRENCY: ${OLLAMA_MAX_CONCURRENCY:-2}
+      OLLAMA_MAX_QUEUE: ${OLLAMA_MAX_QUEUE:-16}
+      OLLAMA_RETRIES: ${OLLAMA_RETRIES:-2}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
+      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-512}
     ports:
       - "${BACKEND_PORT:-5000}:5000"
     volumes:
@@ -141,6 +176,7 @@ volumes:
   chromadb_data:
   redis_data:
   uploads_data:
+  ollama_data:
 
 networks:
   enterprise-network:
