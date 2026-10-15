@@ -24,9 +24,13 @@ process.env.CHUNK_OVERLAP = '50';
 process.env.RAG_TOP_K = '5';
 process.env.RAG_SIMILARITY_THRESHOLD = '0';
 process.env.RAG_MAX_HISTORY_MESSAGES = '6';
-process.env.LLM_PROVIDER = 'openai';
-process.env.LLM_MODEL = 'gpt-4o-mini';
-process.env.EMBEDDING_MODEL = 'text-embedding-3-small';
+// Respect provider selection from the shell so the optional real-Ollama
+// integration test can run; the default suite uses mocked providers regardless.
+process.env.LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
+process.env.EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || 'openai';
+process.env.LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
+process.env.EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
+process.env.OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
 let mongoServer: MongoMemoryServer;
 

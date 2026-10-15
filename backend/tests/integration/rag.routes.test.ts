@@ -7,7 +7,10 @@ import { Message } from '../../src/models/message.model';
 import { setVectorStoreForTesting } from '../../src/integrations/vector-store/vector-store.service';
 import { setEmbeddingsProviderForTesting } from '../../src/integrations/llm/embeddings.service';
 import { setChatProviderForTesting } from '../../src/integrations/llm/llm.service';
-import { NO_ANSWER_MESSAGE } from '../../src/modules/chat/chat.service';
+import {
+  MODEL_UNAVAILABLE_MESSAGE,
+  NO_ANSWER_MESSAGE,
+} from '../../src/modules/chat/chat.service';
 import {
   DeterministicEmbeddingsProvider,
   InMemoryVectorStore,
@@ -128,6 +131,23 @@ describe('RAG Chat API', () => {
     expect(chatProvider.generate).not.toHaveBeenCalled();
   });
 
+  it('returns no citations when the model declines despite retrieved evidence', async () => {
+    const adminToken = await createAdminToken();
+    await uploadKnowledge(adminToken);
+    const employeeToken = await registerEmployee('eng@example.com', 'Engineering');
+
+    setChatProviderForTesting(createMockChatProvider(NO_ANSWER_MESSAGE));
+
+    const res = await ask(employeeToken, {
+      question: 'What is the remote work policy?',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.answer).toBe(NO_ANSWER_MESSAGE);
+    expect(res.body.data.sources).toEqual([]);
+    expect(await Message.countDocuments({ role: 'assistant', 'sources.0': { $exists: true } })).toBe(0);
+  });
+
   it('never retrieves chunks from restricted documents the user cannot access', async () => {
     const adminToken = await createAdminToken();
     await uploadKnowledge(adminToken);
@@ -229,5 +249,52 @@ describe('RAG Chat API', () => {
     const employeeToken = await registerEmployee('eng@example.com', 'Engineering');
     const res = await ask(employeeToken, { question: '' });
     expect(res.status).toBe(400);
+  });
+
+  it('returns a safe 503 and no fabricated citations when the chat model fails', async () => {
+    const adminToken = await createAdminToken();
+    await uploadKnowledge(adminToken);
+    const employeeToken = await registerEmployee('eng@example.com', 'Engineering');
+
+    setChatProviderForTesting({
+      generate: jest
+        .fn()
+        .mockRejectedValue(new Error('connect ECONNREFUSED http://ollama:11434')),
+    });
+
+    const res = await ask(employeeToken, {
+      question: 'What is the remote work policy?',
+    });
+
+    expect(res.status).toBe(503);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('SERVICE_UNAVAILABLE');
+    expect(res.body.message).toBe(MODEL_UNAVAILABLE_MESSAGE);
+    // The internal provider error must not leak to the client.
+    expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
+    // A failed generation must not persist a fabricated answer or citations.
+    expect(await Message.countDocuments({})).toBe(0);
+  });
+
+  it('returns a safe 503 when the embedding model fails', async () => {
+    const adminToken = await createAdminToken();
+    await uploadKnowledge(adminToken);
+    const employeeToken = await registerEmployee('eng@example.com', 'Engineering');
+
+    setEmbeddingsProviderForTesting({
+      embedDocuments: jest.fn(),
+      embedQuery: jest
+        .fn()
+        .mockRejectedValue(new Error('fetch failed to http://ollama:11434')),
+    });
+
+    const res = await ask(employeeToken, {
+      question: 'What is the remote work policy?',
+    });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('SERVICE_UNAVAILABLE');
+    expect(res.body.message).toBe(MODEL_UNAVAILABLE_MESSAGE);
+    expect(await Message.countDocuments({})).toBe(0);
   });
 });
