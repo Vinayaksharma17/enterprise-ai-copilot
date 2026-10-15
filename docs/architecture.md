@@ -13,6 +13,7 @@ The Enterprise AI Knowledge & Support Copilot is a full-stack application that e
 | MongoDB | MongoDB 7.0 | Primary data store for users, documents, document chunks, conversations, and messages |
 | ChromaDB | ChromaDB 0.5.23 | Vector database for document embeddings and similarity search (RAG) |
 | Redis | Redis 7.4 | Caching, rate limiting, and job coordination (reserved for future phases) |
+| Ollama | Ollama 0.5.7 | Local model runtime for chat generation and embeddings (default provider) |
 
 ## Service-to-Service Communication
 
@@ -22,6 +23,7 @@ All services communicate through an internal Docker network (`enterprise-network
 - Backend → MongoDB: `mongodb://mongodb:27017`
 - Backend → Redis: `redis://redis:6379`
 - Backend → ChromaDB: `http://chromadb:8000`
+- Backend → Ollama: `http://ollama:11434` (internal only; not exposed to the host by default)
 
 **Important:** Never use `localhost` for inter-container communication. Only external clients (browsers) use `localhost` to reach exposed ports.
 
@@ -40,6 +42,7 @@ Named volumes ensure data survives container recreation:
 - `chromadb_data`: ChromaDB vector storage
 - `redis_data`: Redis persistence
 - `uploads_data`: Uploaded source documents
+- `ollama_data`: Downloaded Ollama models (`/root/.ollama`)
 
 ## Implemented Features
 
@@ -95,11 +98,31 @@ lack of array metadata support for department lists.
 LLM, embeddings, and vector store access are isolated behind interfaces
 (`backend/src/integrations`):
 
-- `llm.interface.ts`: `ChatProvider`, `EmbeddingsProvider`, `VectorStore` contracts
-- `llm.service.ts` / `embeddings.service.ts`: OpenAI implementations (provider selectable
-  via `LLM_PROVIDER` / `EMBEDDING_PROVIDER`), with deterministic in-memory fakes for tests
+- `llm.interface.ts`: `ChatProvider`, `EmbeddingsProvider` contracts
+- `llm.service.ts` / `embeddings.service.ts`: provider factories that build exactly the
+  provider selected by `LLM_PROVIDER` / `EMBEDDING_PROVIDER`
+  - `openai`: `ChatOpenAI` / `OpenAIEmbeddings` (cloud; requires API keys)
+  - `ollama`: `ChatOllama` / `OllamaEmbeddings` from the official `@langchain/ollama`
+    integration (local; no API keys)
+- `ollama.chat.ts` / `ollama.embeddings.ts`: Ollama providers wrapped with the resilience
+  layer (timeout, bounded retries, and a bounded concurrency semaphore)
+- `resilience.ts`: `Semaphore`, `withTimeout`, `withRetry`, and transient-error detection
 - `vector-store/`: a lightweight fetch-based ChromaDB v1 REST client (avoiding native
   ONNX/transformers dependencies) plus a `VectorStore` service wrapper
+
+Only the configured provider is constructed, so selecting Ollama guarantees no cloud
+client or credential is used implicitly. Provider selection, credentials, Ollama runtime
+settings, and the active embedding-model-specific ChromaDB collection name are all derived
+from configuration in `config/env.ts`.
+
+### Embedding-model collection isolation
+
+Because vectors from different embedding models are not comparable, the active ChromaDB
+collection name is derived from the embedding provider and model
+(`documents__<provider>-<model>`). This guarantees incompatible vectors are never mixed.
+Changing embedding models (for example cloud → local) writes to a new collection; the
+`npm run reindex` script re-embeds existing documents into the current collection, and
+existing collections are never deleted automatically.
 
 This keeps the domain code independent of any single vendor and makes the whole pipeline
 testable without external services.
@@ -111,11 +134,17 @@ testable without external services.
 - Non-root users in production Docker images
 - Internal network isolates database services from external access
 - Environment-based configuration for different deployment stages
-- Config validation fails fast at startup when required variables (including provider
-  credentials) are missing outside of tests
+- Config validation fails fast at startup when required variables are missing outside of
+  tests; cloud provider credentials are required only when a cloud provider is selected
 - Uploaded files are content-validated and size-limited; processing errors are sanitized
   before being persisted or returned
 - Retrieval and citation generation are scoped to the requesting user's authorized documents
+- Ollama is reachable only over the internal Docker network (no published port by default);
+  host exposure, if enabled, is bound to loopback
+- Provider failures are converted to a generic `503` message that never leaks internal
+  endpoints or document content
+- Local inference does not by itself make the application secure: authentication,
+  authorization, file permissions, backups, and network exposure still apply
 
 ## Development vs Production Topology
 

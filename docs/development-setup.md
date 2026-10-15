@@ -25,25 +25,31 @@ cp .env.example .env
 
 **Note:** Never commit the `.env` file. It contains sensitive configuration.
 
-### AI Provider Configuration (required for document Q&A)
+### AI Provider Configuration
 
-Document ingestion and RAG question answering require an embedding and chat model
-provider. Configure these in `.env`:
+The default configuration runs locally on Ollama and needs **no API keys**:
 
 ```env
-LLM_PROVIDER=openai
-LLM_API_KEY=sk-...              # required
-LLM_MODEL=gpt-4o-mini
-LLM_BASE_URL=                   # optional, for OpenAI-compatible providers
+LLM_PROVIDER=ollama
+LLM_MODEL=qwen2.5:3b
 
-EMBEDDING_PROVIDER=openai       # defaults to LLM_PROVIDER
-EMBEDDING_API_KEY=sk-...        # falls back to LLM_API_KEY when empty
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_BASE_URL=             # optional, falls back to LLM_BASE_URL
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=nomic-embed-text
+
+OLLAMA_BASE_URL=http://ollama:11434
 ```
 
-The backend refuses to start outside of tests when the provider credentials are
-missing, so that misconfiguration fails fast instead of at query time.
+After the stack is up, download the models once (they persist in the `ollama_data` volume):
+
+```powershell
+docker exec -it enterprise-ai-copilot-ollama ollama pull qwen2.5:3b
+docker exec -it enterprise-ai-copilot-ollama ollama pull nomic-embed-text
+docker exec -it enterprise-ai-copilot-ollama ollama list
+```
+
+**Cloud providers (optional):** set `LLM_PROVIDER=openai` / `EMBEDDING_PROVIDER=openai` and
+provide `LLM_API_KEY` / `EMBEDDING_API_KEY`. The backend refuses to start outside of tests
+when a *selected* cloud provider is missing its credentials; Ollama requires none.
 
 ## Starting the Project
 
@@ -155,22 +161,34 @@ REDIS_PORT=6380
 - **Redis failing**: Usually starts quickly. Check: `docker compose logs redis`
 - **ChromaDB failing**: May take time on first start. Check: `docker compose logs chromadb`
 
-### Hot Reload Not Working
+### Ollama / Local Model Issues
 
-- Ensure volumes are mounted correctly (check docker-compose.yml)
-- For frontend, the `.next` cache is mounted separately to avoid conflicts
-- Restart the service if needed: `docker compose restart frontend` or `docker compose up --build`
+- **Chat or upload returns `503`**: the model is still loading, Ollama is restarting, or the
+  request queue is saturated. Check `docker compose logs -f ollama`. The backend retries
+  transient failures and returns a safe error otherwise.
+- **Model not found**: pull it — `docker exec -it enterprise-ai-copilot-ollama ollama pull qwen2.5:3b`.
+  Models are never downloaded automatically at request time.
+- **Slow inference**: local CPU inference is expected to be slow on first use (model load +
+  generation). Measure before changing anything:
+  ```powershell
+  docker stats
+  docker compose logs -f ollama
+  ```
+  Prefer smaller models, keep `OLLAMA_KEEP_ALIVE` non-zero to avoid reloading, and lower
+  `OLLAMA_MAX_CONCURRENCY` if the machine is memory-constrained.
 
-### Container Build Issues
+### Inspecting Resource Usage
 
-Clear Docker cache and rebuild:
-```bash
-docker compose build --no-cache
+```powershell
+docker stats                              # live CPU / memory per container
+docker compose ps                         # container status
+docker exec -it enterprise-ai-copilot-ollama ollama ps   # loaded models + memory
 ```
 
 ## Verifying the Setup
 
 1. All containers running: `docker compose ps`
 2. Backend healthy: curl http://localhost:5000/api/v1/health
-3. Frontend accessible: open http://localhost:3000 in browser
-4. Check connectivity indicator on frontend shows "Connected"
+3. Models downloaded: `docker exec -it enterprise-ai-copilot-ollama ollama list`
+4. Frontend accessible: open http://localhost:3000 in browser
+5. Check connectivity indicator on frontend shows "Connected"
