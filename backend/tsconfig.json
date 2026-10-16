@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
+    "module": "esnext",
     "lib": ["ES2020"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -10,9 +10,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
-    "verbatimModuleSyntax": false
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": false,
+    "noEmit": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
-}
+}   
