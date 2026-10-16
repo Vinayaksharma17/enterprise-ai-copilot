@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { login } from '@/lib/api-client';
+import { ApiError, login } from '@/lib/api-client';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -31,12 +31,12 @@ export default function LoginPage() {
       if (response.success && response.data) {
         sessionStorage.setItem('token', response.data.token);
         sessionStorage.setItem('user', JSON.stringify(response.data.user));
-        router.push('/profile');
+        router.push('/dashboard');
       } else {
         setError(response.message || 'Login failed');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError(err instanceof ApiError ? err.message : 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }

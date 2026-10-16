@@ -72,6 +72,19 @@ Named volumes ensure data survives container recreation:
   returned with no sources (no hallucination)
 - Answers return source citations: document id/name, chunk id, page number, section title, excerpt
 
+### Web UI & Routing
+- Public routes: `/` (landing), `/login`, `/register`
+- Authenticated routes live in the Next.js App Router route group `src/app/(app)` and share a
+  common layout (`(app)/layout.tsx`) that provides the navigation and role-aware chrome:
+  `/dashboard`, `/documents`, `/chat`, `/profile`
+- The layout's `AuthProvider` (`src/lib/auth.tsx`) reads the `sessionStorage` token, validates
+  it against `GET /auth/me`, and redirects unauthenticated sessions to `/login`
+- Successful login/registration redirects to `/dashboard`
+- Administrator-only controls (document upload, delete, admin badge) are gated on the user's
+  role. This is a UI convenience only — the backend remains the authorization boundary
+- All API calls go through `src/lib/api-client.ts`, which throws a typed `ApiError` carrying
+  the HTTP status (401/403/404/5xx) and backend error code for consistent handling
+
 ### Data Models (MongoDB)
 - `User`: identity, role, department, active flag
 - `Document`: metadata, `fileHash`, `status`, `accessLevel`, `allowedDepartments`, `chunkCount`

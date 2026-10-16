@@ -97,7 +97,7 @@ On macOS/Linux use the same commands (the `docker exec` syntax is identical).
 - **Grounded Q&A (RAG)**: Employees ask natural-language questions and receive answers grounded strictly in retrieved document chunks, with source citations (document name, page, excerpt).
 - **Access-controlled retrieval**: Retrieval is scoped to documents the requesting user is allowed to see (public, department, or admin-only), enforced server-side through a vector-store filter.
 - **Conversations**: Chat history is persisted per user with conversation ownership enforcement.
-- **Web UI**: Knowledge Base (upload/list/delete) and Chat (citations) pages.
+- **Web UI**: Authenticated Dashboard, Knowledge Base (upload/list/delete), and Chat (citations) pages under a shared, role-aware navigation. Sign-in redirects to the Dashboard.
 
 ## Project Status
 
